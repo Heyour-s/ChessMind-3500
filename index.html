@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChessMind 3500 — анализатор PGN</title>
+    <style>
+        /* Все стили без изменений (как в предыдущем ответе) */
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        body {
+            background: #2e3b4e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background: #f5f5f5;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            padding: 24px;
+            position: relative;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin: 0 0 10px 0;
+            font-weight: 400;
+        }
+        .subtitle {
+            text-align: center;
+            color: #4a6fa5;
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+        .pgn-area {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        #pgnInput {
+            flex: 1;
+            height: 100px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            resize: vertical;
+            font-family: monospace;
+        }
+        #loadBtn {
+            padding: 10px 24px;
+            background: #4a6fa5;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: 0.2s;
+            align-self: flex-start;
+        }
+        #loadBtn:hover {
+            background: #3b5a8c;
+        }
+        .board-wrapper {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+            position: relative;
+        }
+        .board-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .coord-left {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            width: 20px;
+            margin-right: 5px;
+            font-weight: bold;
+            color: #555;
+            text-align: center;
+            line-height: 60px;
+        }
+        .coord-bottom {
+            display: flex;
+            margin-top: 5px;
+            margin-left: 25px;
+            font-weight: bold;
+            color: #555;
+        }
+        .coord-bottom span {
+            width: 60px;
+            text-align: center;
+        }
+        canvas {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            width: 480px;
+            height: 480px;
+            display: block;
+            background: #f0d9b5;
+        }
+        .status-bar {
+            background: #e8e8e8;
+            padding: 8px 16px;
+            border-radius: 8px;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #statusIndicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff9800;
+        }
+        #statusText {
+            color: #555;
+            font-size: 14px;
+        }
+        .navigation {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        .nav-btn {
+            background: #e0e0e0;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: 0.2s;
+            min-width: 40px;
+        }
+        .nav-btn:hover:not(:disabled) {
+            background: #d0d0d0;
+        }
+        .nav-btn:disabled {
+            opacity: 0.5;
+            cursor: default;
+        }
+        #moveSlider {
+            width: 100%;
+            margin: 15px 0;
+        }
+        .info-panel {
+            background: #e8e8e8;
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            justify-content: space-between;
+        }
+        .info-item {
+            flex: 1 1 150px;
+        }
+        .info-label {
+            font-size: 14px;
+            color: #666;
+        }
+        .info-value {
+            font-size: 20px;
+            font-weight: 600;
+            color: #222;
+        }
+        .best-move {
+            color: #2e7d32;
+        }
+        .actual-move {
+            color: #c62828;
+        }
+        .error-message {
+            color: #c62828;
+            background: #ffcdd2;
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            display: none;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 16px;
+            color: #777;
+            font-size: 14px;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.5s;
+        }
+        .loading-card {
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 400px;
+        }
+        .loading-card h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: #4a6fa5;
+            transition: width 0.3s;
+        }
+        #loadingStatus {
+            color: #666;
+            margin-bottom: 10px;
+        }
+        #loadingDetail {
+            font-size: 12px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-card">
+            <h2>ChessMind 3500</h2>
+            <p>Загрузка движка Stockfish...</p>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div id="loadingStatus">Подготовка...</div>
+            <div id="loadingDetail"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h1>♜ ChessMind 3500 ♞</h1>
+        <div class="subtitle">Гроссмейстерский анализ со Stockfish</div>
+
+        <div class="pgn-area">
+            <textarea id="pgnInput" placeholder="Вставьте PGN...">1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3 Nb8 10. d4 Nbd7 11. Nbd2 Bb7 12. Bc2 Re8 13. Nf1 Bf8 14. Ng3 g6 15. Bg5 h6 16. Bd2 c5 17. d5 c4 18. Be3 Qc7 19. Qe2 Nc5 20. Nd2 Nfd7 21. b4 cxb3 22. axb3 Qb6 23. Nf3 Rc8 24. Qd2 Nf6 25. Bh6 Nfd7 26. Bxf8 Kxf8 27. Nh4 Kg7 28. Nhf5+ gxf5 29. Nxf5+ Kf8 30. Nxh6 Rg8 31. Nxg8 Kxg8 32. Qg5+ Kf8 33. Qxf6+ Kg8 34. Qg5+ Kf8 35. Qh6+ Kg8 36. Re3 Nxe4 37. Rg3+ Ng5 38. Rxg5+ hxg5 39. Qxg5+ Kf8 40. Qh6+ Kg8 41. Qg5+ Kf8 42. Qh6+ Kg8 43. Qg5+ Kf8 44. Qh6+ Kg8 45. Qg5+ 1/2-1/2</textarea>
+            <button id="loadBtn">Загрузить</button>
+        </div>
+
+        <div class="status-bar">
+            <div id="statusIndicator"></div>
+            <div id="statusText">Загрузка движка...</div>
+        </div>
+
+        <div class="board-wrapper">
+            <div class="coord-left" id="leftCoords">
+                8<br>7<br>6<br>5<br>4<br>3<br>2<br>1
+            </div>
+            <div class="board-container">
+                <canvas id="boardCanvas" width="480" height="480"></canvas>
+                <div class="coord-bottom" id="bottomCoords">
+                    <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="errorDisplay" class="error-message"></div>
+
+        <div class="navigation">
+            <button class="nav-btn" id="firstBtn" disabled>⏮</button>
+            <button class="nav-btn" id="prevBtn" disabled>◀</button>
+            <button class="nav-btn" id="nextBtn" disabled>▶</button>
+            <button class="nav-btn" id="lastBtn" disabled>⏭</button>
+        </div>
+
+        <input type="range" id="moveSlider" min="0" max="0" value="0" step="1" disabled>
+
+        <div class="info-panel">
+            <div class="info-item">
+                <div class="info-label">Ход</div>
+                <div class="info-value" id="moveNumber">Начало</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Оценка / Вердикт</div>
+                <div class="info-value" id="evalDisplay">—</div>
+                <div id="verdictDisplay" style="font-size: 16px; color: #4a6fa5;"></div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Лучший ход</div>
+                <div class="info-value best-move" id="bestMoveDisplay">—</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Сделанный ход</div>
+                <div class="info-value actual-move" id="actualMoveDisplay">—</div>
+            </div>
+        </div>
+        <div class="footer">
+            ♔ Зелёная стрелка = лучший ход по мнению Stockfish (если сделан не он).
+        </div>
+    </div>
+
+    <!-- Подключаем chess.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+    <script>
+        (function() {
+            // --- Элементы ---
+            const canvas = document.getElementById('boardCanvas');
+            const ctx = canvas.getContext('2d');
+            const squareSize = 60;
+            
+            const pgnInput = document.getElementById('pgnInput');
+            const loadBtn = document.getElementById('loadBtn');
+            const firstBtn = document.getElementById('firstBtn');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const lastBtn = document.getElementById('lastBtn');
+            const moveSlider = document.getElementById('moveSlider');
+            const moveNumberSpan = document.getElementById('moveNumber');
+            const evalDisplay = document.getElementById('evalDisplay');
+            const bestMoveDisplay = document.getElementById('bestMoveDisplay');
+            const actualMoveDisplay = document.getElementById('actualMoveDisplay');
+            const errorDisplay = document.getElementById('errorDisplay');
+            const statusIndicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const progressFill = document.getElementById('progressFill');
+            const loadingStatus = document.getElementById('loadingStatus');
+            const loadingDetail = document.getElementById('loadingDetail');
+            const verdictDisplay = document.getElementById('verdictDisplay');
+
+            // --- Состояние ---
+            let chess = new Chess();
+            let gameHistory = [];
+            let currentMoveIndex = 0;
+            let stockfish = null;
+            let engineReady = false;
+            let currentBestMove = null;
+            let currentEval = null;
+            let prevEval = null;
+            let animating = false;
+            let animationFrame = null;
+            let loadAttempts = 0;
+
+            // --- Unicode символы фигур ---
+            const pieces = {
+                'p': '♟', 'n': '♞', 'b': '♝', 'r': '♜', 'q': '♛', 'k': '♚',
+                'P': '♙', 'N': '♘', 'B': '♗', 'R': '♖', 'Q': '♕', 'K': '♔'
+            };
+
+            const colors = {
+                light: '#f0d9b5',
+                dark: '#b58863',
+                arrow: '#00ff00'
+            };
+
+            // --- Прогресс-бар ---
+            function updateProgress(percent, status, detail = '') {
+                progressFill.style.width = percent + '%';
+                loadingStatus.textContent = status;
+                if (detail) loadingDetail.textContent = detail;
+            }
+
+            // --- Рисование доски (статичное) ---
+            function drawBoardStatic() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                for (let row = 0; row < 8; row++) {
+                    for (let col = 0; col < 8; col++) {
+                        ctx.fillStyle = (row + col) % 2 === 0 ? colors.light : colors.dark;
+                        ctx.fillRect(col * squareSize, row * squareSize, squareSize, squareSize);
+                    }
+                }
+
+                const board = chess.board();
+                ctx.font = 'bold 40px "Segoe UI", "Arial Unicode MS", Arial, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.shadowColor = 'rgba(0,0,0,0.3)';
+                ctx.shadowBlur = 4;
+                ctx.shadowOffsetX = 2;
+                ctx.shadowOffsetY = 2;
+                
+                for (let row = 0; row < 8; row++) {
+                    for (let col = 0; col < 8; col++) {
+                        const piece = board[row][col];
+                        if (piece) {
+                            const symbol = pieces[piece.type === 'k' ? (piece.color === 'w' ? 'K' : 'k') :
+                                               piece.type === 'q' ? (piece.color === 'w' ? 'Q' : 'q') :
+                                               piece.type === 'r' ? (piece.color === 'w' ? 'R' : 'r') :
+                                               piece.type === 'b' ? (piece.color === 'w' ? 'B' : 'b') :
+                                               piece.type === 'n' ? (piece.color === 'w' ? 'N' : 'n') :
+                                               piece.type === 'p' ? (piece.color === 'w' ? 'P' : 'p') : ''];
+                            
+                            ctx.fillStyle = piece.color === 'w' ? '#ffffff' : '#333333';
+                            ctx.fillText(symbol, col * squareSize + squareSize/2, row * squareSize + squareSize/2);
+                        }
+                    }
+                }
+                ctx.shadowColor = 'transparent';
+
+                // Рисуем стрелку
+                if (currentBestMove && currentBestMove.from && currentBestMove.to) {
+                    const actualSan = currentMoveIndex > 0 ? gameHistory[currentMoveIndex - 1]?.san : null;
+                    if (actualSan && actualSan !== currentBestMove.san) {
+                        drawArrow(currentBestMove.from, currentBestMove.to);
+                    }
+                }
+            }
+
+            function drawArrow(from, to) {
+                const fromCol = from.charCodeAt(0) - 97;
+                const fromRow = 8 - parseInt(from[1]);
+                const toCol = to.charCodeAt(0) - 97;
+                const toRow = 8 - parseInt(to[1]);
+
+                const startX = fromCol * squareSize + squareSize / 2;
+                const startY = fromRow * squareSize + squareSize / 2;
+                const endX = toCol * squareSize + squareSize / 2;
+                const endY = toRow * squareSize + squareSize / 2;
+
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(endX, endY);
+                ctx.strokeStyle = colors.arrow;
+                ctx.lineWidth = 6;
+                ctx.stroke();
+
+                const angle = Math.atan2(endY - startY, endX - startX);
+                const arrowSize = 18;
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - arrowSize * Math.cos(angle - 0.3), endY - arrowSize * Math.sin(angle - 0.3));
+                ctx.lineTo(endX - arrowSize * Math.cos(angle + 0.3), endY - arrowSize * Math.sin(angle + 0.3));
+                ctx.closePath();
+                ctx.fillStyle = colors.arrow;
+                ctx.fill();
+            }
+
+            // --- Анимация хода (без изменений) ---
+            function animateMove(from, to, callback) {
+                if (animating) return;
+                animating = true;
+                const fromCol = from.charCodeAt(0) - 97;
+                const fromRow = 8 - parseInt(from[1]);
+                const toCol = to.charCodeAt(0) - 97;
+                const toRow = 8 - parseInt(to[1]);
+
+                const startX = fromCol * squareSize + squareSize/2;
+                const startY = fromRow * squareSize + squareSize/2;
+                const endX = toCol * squareSize + squareSize/2;
+                const endY = toRow * squareSize + squareSize/2;
+
+                const piece = chess.board()[fromRow][fromCol];
+                if (!piece) {
+                    callback();
+                    return;
+                }
+                const symbol = pieces[piece.type === 'k' ? (piece.color === 'w' ? 'K' : 'k') :
+                                    piece.type === 'q' ? (piece.color === 'w' ? 'Q' : 'q') :
+                                    piece.type === 'r' ? (piece.color === 'w' ? 'R' : 'r') :
+                                    piece.type === 'b' ? (piece.color === 'w' ? 'B' : 'b') :
+                                    piece.type === 'n' ? (piece.color === 'w' ? 'N' : 'n') :
+                                    piece.type === 'p' ? (piece.color === 'w' ? 'P' : 'p') : ''];
+
+                const startTime = performance.now();
+                const duration = 300;
+
+                function animate(currentTime) {
+                    const elapsed = currentTime - startTime;
+                    let progress = Math.min(elapsed / duration, 1);
+                    const ease = 1 - Math.pow(1 - progress, 3);
+
+                    const currentX = startX + (endX - startX) * ease;
+                    const currentY = startY + (endY - startY) * ease;
+
+                    drawBoardStatic();
+
+                    ctx.save();
+                    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                    ctx.shadowBlur = 8;
+                    ctx.shadowOffsetX = 3;
+                    ctx.shadowOffsetY = 3;
+                    ctx.font = 'bold 40px "Segoe UI", "Arial Unicode MS", Arial, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = piece.color === 'w' ? '#ffffff' : '#333333';
+                    ctx.fillText(symbol, currentX, currentY);
+                    ctx.restore();
+
+                    if (progress < 1) {
+                        animationFrame = requestAnimationFrame(animate);
+                    } else {
+                        animating = false;
+                        if (callback) callback();
+                    }
+                }
+
+                animationFrame = requestAnimationFrame(animate);
+            }
+
+            // --- Вердикты ---
+            function getVerdict(diff) {
+                const absDiff = Math.abs(diff);
+                if (diff === 0) return 'Лучший';
+                if (absDiff < 0.2) return 'Прекрасный';
+                if (absDiff < 0.5) return 'Хороший';
+                if (absDiff < 1.0) return 'Неточность';
+                if (absDiff < 2.0) return 'Ошибка';
+                return 'Зевок';
+            }
+
+            // --- Загрузка только Stockfish 10 (чистый JS) с двух CDN ---
+            function initEngine() {
+                updateProgress(5, 'Подключение к CDN...');
+                loadAttempts = 0;
+                tryLoadStockfish10();
+            }
+
+            function tryLoadStockfish10() {
+                const urls = [
+                    'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js',
+                    'https://unpkg.com/stockfish@10.0.2/src/stockfish.js'
+                ];
+
+                if (loadAttempts >= urls.length) {
+                    handleEngineError('Не удалось загрузить движок ни с одного CDN. Проверьте интернет или отключите блокировщики.');
+                    return;
+                }
+
+                const url = urls[loadAttempts];
+                loadAttempts++;
+                updateProgress(20, `Попытка ${loadAttempts}/${urls.length}: загрузка Stockfish 10...`, url);
+
+                const script = document.createElement('script');
+                script.src = url;
+                script.crossOrigin = 'anonymous';
+
+                script.onload = function() {
+                    console.log(`Stockfish script loaded from ${url}`);
+                    if (typeof STOCKFISH === 'function') {
+                        try {
+                            stockfish = STOCKFISH();
+                            setupEngine();
+                        } catch (e) {
+                            console.error('Error initializing Stockfish:', e);
+                            // пробуем следующий CDN
+                            tryLoadStockfish10();
+                        }
+                    } else {
+                        console.warn('STOCKFISH not defined after loading script');
+                        tryLoadStockfish10();
+                    }
+                };
+
+                script.onerror = function(err) {
+                    console.error(`Failed to load script from ${url}`, err);
+                    tryLoadStockfish10();
+                };
+
+                document.head.appendChild(script);
+            }
+
+            function setupEngine() {
+                stockfish.onmessage = function(e) {
+                    const line = e.data;
+                    // console.log('SF:', line); // раскомментировать для отладки
+
+                    if (line === 'uciok' || line === 'readyok') {
+                        engineReady = true;
+                        updateProgress(100, 'Готов!');
+                        setTimeout(() => {
+                            loadingOverlay.style.opacity = '0';
+                            setTimeout(() => {
+                                loadingOverlay.style.display = 'none';
+                            }, 500);
+                        }, 300);
+                        statusIndicator.style.background = '#4caf50';
+                        statusText.textContent = 'Stockfish 10 (3300+) готов';
+                        if (chess) requestAnalysis();
+                    }
+
+                    if (line.includes(' bestmove ')) {
+                        const match = line.match(/bestmove\s+(\w+)/);
+                        if (match && match[1]) {
+                            const moveStr = match[1];
+                            const from = moveStr.substring(0, 2);
+                            const to = moveStr.substring(2, 4);
+
+                            const chessCopy = new Chess(chess.fen());
+                            const move = chessCopy.move({ from, to, promotion: 'q' });
+
+                            currentBestMove = move ? {
+                                from: move.from,
+                                to: move.to,
+                                san: move.san
+                            } : { from, to, san: moveStr };
+
+                            bestMoveDisplay.textContent = currentBestMove.san;
+                            drawBoardStatic();
+                        }
+                    }
+
+                    if (line.includes(' score cp ')) {
+                        const match = line.match(/score cp\s+(-?\d+)/);
+                        if (match) {
+                            const cp = parseInt(match[1]) / 100;
+                            if (currentEval !== null) {
+                                prevEval = currentEval;
+                            }
+                            currentEval = cp;
+                            evalDisplay.textContent = cp.toFixed(2);
+
+                            if (currentMoveIndex > 0 && prevEval !== null) {
+                                const side = (chess.turn() === 'w') ? 'b' : 'w';
+                                let diff;
+                                if (side === 'w') {
+                                    diff = currentEval - prevEval;
+                                } else {
+                                    diff = prevEval - currentEval;
+                                }
+                                const verdict = getVerdict(diff);
+                                verdictDisplay.textContent = verdict;
+                            } else {
+                                verdictDisplay.textContent = '';
+                            }
+                        }
+                    }
+                };
+
+                stockfish.postMessage('uci');
+                stockfish.postMessage('isready');
+                stockfish.postMessage('setoption name Threads value 1');
+                stockfish.postMessage('setoption name Hash value 16');
+            }
+
+            function handleEngineError(msg) {
+                statusIndicator.style.background = '#f44336';
+                statusText.textContent = 'Движок не загружен';
+                errorDisplay.textContent = msg + ' Навигация по PGN доступна без анализа.';
+                errorDisplay.style.display = 'block';
+                loadingOverlay.style.display = 'none';
+            }
+
+            function requestAnalysis() {
+                if (!engineReady || !stockfish) return;
+                const fen = chess.fen();
+                stockfish.postMessage('stop');
+                stockfish.postMessage('position fen ' + fen);
+                stockfish.postMessage('go movetime 500');
+            }
+
+            // --- Навигация (без изменений) ---
+            function goToMove(index) {
+                if (index < 0 || index > gameHistory.length || animating) return;
+
+                let move = null;
+                if (index > currentMoveIndex && index <= gameHistory.length) {
+                    move = gameHistory[index - 1];
+                }
+
+                currentMoveIndex = index;
+                chess.reset();
+                for (let i = 0; i < currentMoveIndex; i++) {
+                    chess.move(gameHistory[i].san);
+                }
+
+                moveSlider.value = currentMoveIndex;
+                updateNavButtons();
+                updateInfo();
+
+                if (engineReady) requestAnalysis();
+
+                if (move && move.from && move.to) {
+                    animateMove(move.from, move.to, () => {
+                        drawBoardStatic();
+                    });
+                } else {
+                    drawBoardStatic();
+                }
+            }
+
+            function updateNavButtons() {
+                firstBtn.disabled = (currentMoveIndex === 0);
+                prevBtn.disabled = (currentMoveIndex === 0);
+                nextBtn.disabled = (currentMoveIndex === gameHistory.length);
+                lastBtn.disabled = (currentMoveIndex === gameHistory.length);
+            }
+
+            function updateInfo() {
+                const actualSan = currentMoveIndex > 0 ? gameHistory[currentMoveIndex - 1]?.san : null;
+                actualMoveDisplay.textContent = actualSan || '—';
+
+                if (currentMoveIndex === 0) {
+                    moveNumberSpan.textContent = 'Начало';
+                } else {
+                    const moveNum = Math.floor((currentMoveIndex + 1) / 2);
+                    const suffix = (currentMoveIndex % 2 === 1) ? '...' : '.';
+                    moveNumberSpan.textContent = `${moveNum}${suffix} ${actualSan}`;
+                }
+
+                verdictDisplay.textContent = '';
+            }
+
+            // --- Очистка PGN (без изменений) ---
+            function cleanPGN(raw) {
+                const lines = raw.split(/\r?\n/).filter(line => line.trim() !== '');
+                const tags = lines.filter(line => line.trim().startsWith('['));
+                const moveLines = lines.filter(line => !line.trim().startsWith('['));
+                const moves = moveLines.join(' ').replace(/\s+/g, ' ').trim();
+                return tags.join('\n') + (tags.length > 0 ? '\n' : '') + moves;
+            }
+
+            // --- Загрузка PGN (без изменений) ---
+            function loadPGN() {
+                errorDisplay.style.display = 'none';
+                const rawPgn = pgnInput.value.trim();
+                if (!rawPgn) {
+                    errorDisplay.textContent = 'Введите PGN';
+                    errorDisplay.style.display = 'block';
+                    return;
+                }
+
+                const cleaned = cleanPGN(rawPgn);
+                const tempChess = new Chess();
+
+                try {
+                    const success = tempChess.load_pgn(cleaned);
+                    if (!success) {
+                        const onlyMoves = cleaned.replace(/\[.*?\]\s*/g, '').trim();
+                        const success2 = tempChess.load_pgn(onlyMoves);
+                        if (!success2) {
+                            throw new Error('Не удалось распознать ходы');
+                        }
+                    }
+
+                    chess = tempChess;
+                    gameHistory = chess.history({ verbose: true });
+                    chess.reset();
+                    currentMoveIndex = 0;
+                    moveSlider.max = gameHistory.length;
+                    moveSlider.value = 0;
+                    moveSlider.disabled = false;
+                    currentBestMove = null;
+                    currentEval = null;
+                    prevEval = null;
+                    evalDisplay.textContent = '—';
+                    bestMoveDisplay.textContent = '—';
+                    verdictDisplay.textContent = '';
+                    updateNavButtons();
+                    drawBoardStatic();
+
+                    if (engineReady) requestAnalysis();
+
+                } catch (e) {
+                    errorDisplay.textContent = 'Ошибка PGN: ' + e.message;
+                    errorDisplay.style.display = 'block';
+                }
+            }
+
+            // --- Обработчики ---
+            firstBtn.addEventListener('click', () => goToMove(0));
+            prevBtn.addEventListener('click', () => goToMove(currentMoveIndex - 1));
+            nextBtn.addEventListener('click', () => goToMove(currentMoveIndex + 1));
+            lastBtn.addEventListener('click', () => goToMove(gameHistory.length));
+            moveSlider.addEventListener('input', (e) => goToMove(parseInt(e.target.value)));
+            loadBtn.addEventListener('click', loadPGN);
+
+            // --- Инициализация ---
+            window.addEventListener('load', () => {
+                chess.reset();
+                gameHistory = [];
+                currentMoveIndex = 0;
+                moveSlider.max = 0;
+                moveSlider.value = 0;
+                moveSlider.disabled = true;
+                firstBtn.disabled = true;
+                prevBtn.disabled = true;
+                nextBtn.disabled = true;
+                lastBtn.disabled = true;
+                drawBoardStatic();
+                initEngine();
+            });
+        })();
+    </script>
+</body>
+</html>
